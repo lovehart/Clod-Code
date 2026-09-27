@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Clod Code</title>
+<link rel="stylesheet" href="styles.css">
+
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <button id="sidebarToggleBtn" title="Toggle sidebar" aria-label="Toggle sidebar">👽 Clod Code</button>
+    <nav class="header-tabs" aria-label="Main views">
+      <button class="tab active" data-tab="bigchat">🧠 Big Chat <span class="badge" id="bigChatBadge">0</span></button>
+      <button class="tab" data-tab="files">📁 Files</button>
+      <button class="tab" data-tab="turns">📋 Turns <span class="badge" id="turnsBadge">0</span></button>
+      <button class="tab" data-tab="chat">💬 Chat <span class="badge" id="chatBadge">0</span></button>
+      <button class="tab" data-tab="browser">🌐 Web Browser</button>
+      <button class="tab" data-tab="desktop">🖥 Desktop</button>
+    </nav>
+  </div>
+  <div class="header-actions">
+    <span id="turnIndicator">No turns yet</span>
+    <button id="themeToggleBtn" type="button" aria-label="Switch to light mode" title="Switch to light mode">☀ Light</button>
+    <button id="settingsBtn">⚙ Settings</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar collapsed">
+    <section class="panel">
+      <h2>Input Files (Turns Tab)</h2>
+      <div class="actions">
+        <button id="loadDefaultsBtn" class="small">Load Turn 1 Defaults</button>
+      </div>
+      <div id="dropzone" class="dropzone">
+        Drop files, folders, or .zip here<br>
+        <small>or click to browse · extracts *_input.md from folders &amp; zips</small>
+      </div>
+      <div class="actions">
+        <button id="browseBtn" class="small">Browse Files</button>
+        <button id="browseFolderBtn" class="small">Browse Folder</button>
+        <input type="file" id="fileInput" multiple accept=".md,.txt,.zip" style="display:none">
+        <input type="file" id="folderInput" webkitdirectory multiple style="display:none">
+      </div>
+      <div id="fileList"></div>
+      <div class="actions" style="margin-top: 8px;">
+        <button id="runStopBtn" class="danger" style="display:none;" title="Cancel the running turn">■ Stop</button><button id="runBtn" class="primary">▶ Run Turn</button>
+        <button id="clearInputsBtn" class="small">Clear</button>
+      </div>
+      <div id="runProgress" class="progress-bar" style="display:none;">
+        <div class="fill" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Conversations</h2>
+      <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+        <span id="convSummary">0 conversations, 0 messages total</span>
+      </div>
+      <div class="actions">
+        <button id="resetAllConvBtn" class="small danger" type="button">Reset All Conversations</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>🧪 Diagnostics</h2>
+      <div class="actions">
+        <button id="testAllBtn" class="small primary">🧪 Test All Presets</button>
+        <button id="clearTestBtn" class="small">Clear Results</button>
+      </div>
+      <div id="testResults" style="font-size: 11px; margin-top: 8px; max-height: 280px; overflow-y: auto;">
+        <div style="color: var(--text-muted); padding: 4px;">Click "Test All Presets" to ping each preset with a minimal message and verify it works. Shows the actual underlying model and any errors.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>History</h2>
+      <div id="turnList">
+        <div style="color: var(--text-muted); font-size: 12px; padding: 8px;">No turns run yet.</div>
+      </div>
+      <div class="actions" style="margin-top: 8px;">
+        <button id="exportMdBtn" class="small">Export .md</button>
+        <button id="exportJsonBtn" class="small">Export .json</button>
+        <button id="clearHistoryBtn" class="small danger">Clear History</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Quick Help</h2>
+      <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+        <p><strong style="color: var(--text);">Big Chat tab:</strong> orchestrator mode — the Big Model can call the 14 character presets via tools. Supports multiple threads.</p>
+        <p><strong style="color: var(--text);">Turns tab:</strong> batch-run multiple presets from input files. Maintains conversation history across turns.</p>
+        <p><strong style="color: var(--text);">Chat tab:</strong> chat directly with characters that have been messaged. Each character supports multiple threads. Tool calls from Big Chat appear here.</p>
+        <p style="margin-top: 8px;"><small>API key & conversations saved in your browser only (localStorage). Requests go straight from your machine to the model provider you route to — OpenRouter by default, plus whichever providers you enable in Settings → Providers (Modal, NVIDIA, Google AI Studio, Groq and the rest of the default list) — and to the web search provider (SearXNG by default, DuckDuckGo as a fallback). No other service receives your keys or conversations.</small></p>
+      </div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <div id="browserView" class="tab-view">
+      <div class="browser-layout">
+        <div class="browser-toolbar">
+          <button type="button" id="browserBackBtn" class="small" title="Back">◀</button>
+          <button type="button" id="browserFwdBtn" class="small" title="Forward">▶</button>
+          <button type="button" id="browserReloadBtn" class="small" title="Reload">⟳</button>
+          <input type="text" id="browserUrlInput" class="browser-url" placeholder="Search or enter a URL… (the agent can drive this browser too)" spellcheck="false">
+          <button type="button" id="browserGoBtn" class="small primary">Go</button>
+          <button type="button" id="browserOpenWebappBtn" class="small" title="Open any web app (HTML file or folder) from disk — the agent's run_webapp tool also loads here">📂 Open…</button>
+          <button type="button" id="browserReloadWebappBtn" class="small" title="Reload the current web app (re-serves workspace apps so file edits show up)">⟳ App</button>
+          <button type="button" id="browserSnapshotBtn" class="small" title="Copy the page's labeled element map to the chat (what the agent sees)">/map</button>
+          <button type="button" id="browserTextBtn" class="small" title="Copy the page's readable text to the chat">/text</button>
+          <button type="button" id="browserClearBtn" class="small" title="Clear cookies, cache and history for this browser">🧹</button>
+        </div>
+        <div class="browser-tabstrip" id="browserTabStrip" title="Agent browser tabs — the AI can keep several pages open (browser_tabs tool)"></div>
+        <div class="browser-statusbar" id="browserStatus">Idle</div>
+        <div class="browser-stage" id="browserStage">
+          <webview id="browserWebview" src="about:blank" allowpopups="true" style="width:100%;height:100%;border:0;"></webview>
+          <div class="browser-empty" id="browserEmpty">
+            <div class="be-inner">
+              <h3>🌐 Agent Browser</h3>
+              <p>A real Chromium window, sandboxed inside the app. Type a URL above, or just ask the agent in Big Chat —</p>
+              <p style="font-family:var(--mono);font-size:12px;color:var(--accent);">“Open wikipedia.org and summarize the article on Electron.”</p>
+              <p style="font-size:11px;color:var(--text-muted);max-width:420px;">The AI can navigate, click, fill forms, scroll, read the page, screenshot and run page scripts via its <code>browser_*</code> tools (toggle in Settings → Agent Tools). Cookies are in-memory and cleared with 🧹 or on restart. Never enter real passwords.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="desktopView" class="tab-view">
+      <div class="desktop-layout">
+        <div class="desktop-toolbar">
+          <button type="button" id="desktopLaunchBtn" class="small primary" title="Pick an .exe and open it inside this tab">📂 Open App…</button>
+          <button type="button" id="desktopRefreshBtn" class="small" title="Refresh the hosted apps list">⟳ Refresh</button>
+          <span class="desktop-hint">Apps launched here run on your PC but their windows live inside this tab — they can't land on your desktop.</span>
+        </div>
+        <div class="godot-card" id="desktopGodotCard">
+          <div class="godot-card-head">
+            <strong>🎮 Godot</strong>
+            <span class="godot-card-meta" id="desktopGodotEngine">checking…</span>
+            <span class="godot-card-meta" id="desktopGodotProject"></span>
+          </div>
+          <div class="godot-card-actions">
+            <button type="button" id="desktopGodotRunBtn" class="small primary" title="Play the project's main scene with nothing on screen and save a screenshot">▶ Run &amp; capture</button>
+            <button type="button" id="desktopGodotEditorBtn" class="small" title="Open the real Godot editor on this project, hosted in this tab">🛠 Open editor</button>
+            <button type="button" id="desktopGodotCheckBtn" class="small" title="Load the project once and report every parse or import error">✓ Check project</button>
+            <button type="button" id="desktopGodotEngineBtn" class="small" title="Download the newest stable Godot into the app's own engine folder">⬇ Install engine</button>
+          </div>
+          <p class="godot-card-status" id="desktopGodotStatus"></p>
+          <img id="desktopGodotShot" class="godot-card-shot" alt="" hidden>
+        </div>
+        <div class="desktop-appstrip" id="desktopAppStrip" title="Hosted apps"></div>
+        <div class="desktop-stage" id="desktopStage">
+          <div id="desktopGuestAnchor" class="desktop-guest-anchor"></div>
+          <div class="desktop-empty" id="desktopEmpty">
+            <div class="be-inner">
+              <h3>🖥 Desktop</h3>
+              <p>Open a native app (Notepad, Godot, Minecraft…) and it runs here, inside the app.</p>
+              <p style="font-size:11px;color:var(--text-muted);max-width:460px;">The AI can also launch apps here via its tools. Apps render in this tab's stage; new windows they open are caught and kept in the tab too — a watchdog tick re-homes any that try to escape onto the desktop. Windows-only.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bigchatView" class="tab-view active">
+      <div class="bigchat-layout">
+      <button type="button" id="bigChatSidebarToggle" class="sidebar-toggle" title="Show chat list">
+        <span class="st-label">▸ Chats</span>
+      </button>
+      <aside class="bigchat-threads collapsed" id="bigChatThreadsPanel">
+        <div class="bigchat-threads-header">
+          <span>Chats</span>
+          <span style="display:flex;gap:4px;">
+            <button id="bigChatExportAllBtn" class="bigchat-thread-new" title="Export all chats to one .md" aria-label="Export all chats to one .md file">⬇</button>
+            <button id="bigChatNewThreadBtn" class="bigchat-thread-new" title="New chat" aria-label="New chat thread">+</button>
+          </span>
+        </div>
+        <div id="bigChatThreadList" class="bigchat-thread-list"></div>
+      </aside>
+      <div class="bigchat-main">
+        <div class="bigchat-controls">
+          <button type="button" class="bigchat-controls-toggle" id="bigChatControlsToggleBtn" aria-expanded="false" aria-controls="bigChatControlsBody" title="Show / hide model controls">
+            <span class="controls-toggle-icon">▸</span>
+            <span class="controls-summary" id="bigChatControlsSummary">Model controls</span>
+            <div class="ctx-meter" id="bigChatCtxMeter" title="Estimated tokens in this conversation vs. the selected model's context window">
+              <div class="ctx-bar"><div class="ctx-fill" id="bigChatCtxFill"></div></div>
+              <span class="ctx-text" id="bigChatCtxText">—</span>
+            </div>
+          </button>
+          <div class="bigchat-controls-body collapsed" id="bigChatControlsBody">
+            <div class="row" style="align-items:center;flex-wrap:wrap;">
+            <label style="flex:1;margin:0;min-width:180px;">
+              Model
+              <select id="bigModelSelect" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:12px;margin-top:4px;"></select>
+            </label>
+            <label style="flex:1;margin:0;min-width:180px;">
+              Provider
+              <select id="bigProviderSelect" title="Pin this chat's requests to a specific provider, instead of the global order in Settings → Models &amp; Routing." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:12px;margin-top:4px;"></select>
+            </label>
+            <label style="flex:1;margin:0;min-width:180px;">
+              Preset
+              <select id="bigPresetSelect" title="Choose a preset to use for this Big Chat thread (None by default)" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:12px;margin-top:4px;"></select>
+            </label>
+            <label style="flex:1;margin:0;min-width:180px;">
+              Thinking Level
+              <select id="bigThinkingSelect" title="Set reasoning effort / thinking level for reasoning models" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--mono);font-size:12px;margin-top:4px;">
+                <option value="auto">Auto / Default</option>
+                <option value="none">None</option>
+                <option value="minimal">Minimal</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="xhigh">X-High</option>
+                <option value="max">Max</option>
+              </select>
+            </label>
+          </div>
+          <div id="agentStatusBar" style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted);flex-wrap:wrap;">
+            <span>📁 Workspace:</span>
+            <strong id="agentWorkspaceChip" style="color:var(--text);font-family:var(--mono);font-weight:500;">In memory</strong>
+            <button type="button" id="agentQuickMount" class="small" style="padding:1px 6px;font-size:10px;">Change…</button>
+            <span id="agentFileCount"></span>
+          </div>
+          <details id="bigChatAdvancedDetails" class="bigchat-sysprompt">
+            <summary>⚙ Big Chat Settings</summary>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:0 10px 10px;">
+              <div id="bigChatProviderCompat" class="bigchat-provider-compat" style="display:none;"></div>
+              <small id="bigChatModelHint" style="color:var(--text-muted);"></small>
+          <small id="bigChatProviderHint" style="color:var(--text-muted);"></small>
+          <small id="bigChatPresetHint" style="color:var(--text-muted);"></small>
+          <details id="bigChatCapabilitiesDetails" class="bigchat-sysprompt">
+            <summary>🧰 Big Chat Capabilities <span id="bigChatCapabilitiesStatus" class="sysprompt-status">(defaults)</span></summary>
+            <div id="bigChatCapabilitiesPanel" style="margin-top:8px;"></div>
+          </details>
+              <details id="bigSystemPromptDetails" class="bigchat-sysprompt">
+                <summary>⚙ System Prompt <span id="bigSystemPromptStatus" class="sysprompt-status">(none)</span></summary>
+                <label style="margin:0;">
+                  Optional — gives the Big Model its role / instructions
+                  <textarea id="bigSystemPrompt" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:inherit;font-size:13px;margin-top:4px;resize:vertical;"></textarea>
+                </label>
+              </details>
+            </div>
+          </details>
+          </div>
+        </div>
+        <div class="chat-messages-wrap">
+          <div class="chat-messages" id="bigChatMessages"></div>
+          <div class="scroll-nav">
+            <button type="button" id="bigChatScrollTop" title="Jump to top of chat">▲</button>
+            <button type="button" id="bigChatScrollBottom" title="Jump to latest message">▼</button>
+          </div>
+          <!-- Floating task-list popup (top right): the agent's persistent plan,
+               rendered outside the message stream. Collapses to a count pill. -->
+          <div class="bc-tasks-pop" id="bigChatTasksPopup" hidden>
+            <div class="bc-tasks-pill" id="bigChatTasksPill" title="Show task list">☑️ <span id="bigChatTasksPillCount"></span></div>
+            <div class="bc-tasks-card" id="bigChatTasksCard" hidden>
+              <div class="bc-tasks-head">
+                <strong>☑️ Task list</strong>
+                <span class="bc-tasks-progress" id="bigChatTasksProgress"></span>
+                <span style="flex:1;"></span>
+                <button type="button" id="bigChatTasksMin" class="small" title="Collapse to pill">▾</button>
+              </div>
+              <div class="bc-tasks-body" id="bigChatTasksBody"></div>
+            </div>
+          </div>
+        </div>
+        <div class="tts-chat-progress" id="bigChatTtsProgress" style="display:none;"><div class="tts-chat-progress-fill"></div></div>
+        <div class="chat-input-area" id="bigChatInputArea">
+          <div class="chat-input-wrap">
+            <div class="input-attach-bar" id="bigChatAttachBar" hidden></div>
+            <textarea id="bigChatInput" placeholder="Message the Big Model... (Ctrl+Enter to send). It can call the 14 character presets directly." disabled></textarea>
+            <div class="input-scroll-nav">
+              <button type="button" id="bigChatJumpTop" title="Jump to the start of your message">▲</button>
+              <button type="button" id="bigChatJumpBottom" title="Jump to the end of your message">▼</button>
+            </div>
+          </div>
+          <div class="chat-input-actions">
+            <div class="left">
+              <input type="file" id="bigChatFileInput" multiple style="display:none;" title="Attach files">
+              <button type="button" id="bigChatAttachBtn" class="small" title="Attach files (images, PDFs, documents — anything). You can also drag files here or paste an image.">📎</button>
+              <span style="font-size:12px;color:var(--text-muted);">The Big Model can call presets via the <code>call_preset</code> tool.</span>
+            </div>
+            <div class="right">
+              <span id="bigChatRunStats" style="font-size:11px;color:var(--text-muted);font-family:var(--mono);display:none;"></span>
+              <span id="bigChatStatus" style="font-size:12px;color:var(--text-muted);"></span>
+              <button id="bigChatExportBtn" class="small" title="Export this chat to a .md file">⬇ .md</button>
+              <button id="bigChatStopBtn" class="danger" style="display:none;" title="Stop generating">■ Stop</button>
+              <button id="bigChatSendBtn" class="primary" disabled>Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="button" id="bigChatSubagentsToggle" class="sidebar-toggle right" title="Show subagents" aria-controls="bigChatSubagentsPanel">
+        <span class="st-label">▸ Subagents</span>
+      </button>
+      <aside class="bigchat-subagents" id="bigChatSubagentsPanel" aria-label="Active subagents">
+        <div id="bigChatSubagentsResizeHandle" class="bigchat-subagents-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize Subagents sidebar" tabindex="0" title="Drag to resize Subagents sidebar"></div>
+        <div class="bigchat-subagents-header">
+          <div class="bigchat-subagents-title"><span>🧩 Subagents</span><span id="bigChatSubagentCount" class="bigchat-subagents-count">0</span></div>
+          <span id="bigChatSubagentSummary" class="bigchat-subagents-summary">Nothing running in this chat</span>
+        </div>
+        <div id="bigChatSubagentTabs" class="bigchat-subagent-tabs" role="tablist" aria-label="Active subagents"></div>
+        <div id="bigChatSubagentDetail" class="bigchat-subagents-detail" aria-live="polite"></div>
+      </aside>
+      </div>
+    </div>
+
+    <!-- AskUserQuestion: structured multiple-choice interrupt shown while the
+         agent waits for the user's decision. The pending promise resolves when
+         the user picks an option (or the run is stopped). -->
+    <div class="ask-question-overlay" id="askUserQuestionOverlay" hidden>
+      <div class="ask-question-card" role="dialog" aria-modal="true" aria-labelledby="askUserQuestionTitle">
+        <div class="ask-question-head">
+          <strong id="askUserQuestionTitle">🤔 The agent needs your decision</strong>
+        </div>
+        <div id="askUserQuestionBody" class="ask-question-body"><!-- question text + options injected --></div>
+        <div class="ask-question-foot">
+          <button type="button" id="askUserQuestionDismiss" class="small">✕ Stop &amp; cancel the run</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="filesView" class="tab-view">
+      <div class="files-layout">
+        <aside class="files-side">
+          <div class="files-side-header">
+            <span>Workspace files</span>
+            <span style="margin-left:auto;display:flex;gap:4px;">
+              <button type="button" id="filesRefreshBtn" title="Refresh the file list">⟳</button>
+              <button type="button" id="filesBaselineBtn" title="Baseline = current file contents. Changes are shown against this.">Set baseline</button>
+            </span>
+          </div>
+          <div id="fileTree" class="files-tree"><div class="ft-empty">Loading workspace…</div></div>
+        </aside>
+        <div class="files-editor">
+          <div class="files-editor-header" id="filesEditorHeader" style="display:none;"></div>
+          <div class="files-editor-body" id="filesEditorBody"><div class="fe-empty">Select a file on the left to view it.<br><br>Files the agent writes or edits are shown here with a <b>diff against the baseline</b>, so you can see exactly what changed.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="turnsView" class="tab-view">
+      <div id="chatHistory">
+        <div class="empty-state">
+          <h3>No chat history yet</h3>
+          <p>Load some input files and click "Run Turn" to see API responses here.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="chatView" class="tab-view">
+      <div class="chat-layout">
+        <button type="button" id="chatSidebarToggle" class="sidebar-toggle" title="Show characters">
+          <span class="st-label">▸ Characters</span>
+        </button>
+        <div class="chat-sidebar collapsed" id="chatSidebarPanel">
+          <div class="chat-sidebar-header">
+            <h2>Characters with messages</h2>
+            <div class="chat-sidebar-actions">
+              <button id="chatSelectAllBtn" class="small" type="button">All Active</button>
+              <button id="chatSelectNoneBtn" class="small" type="button">None</button>
+            </div>
+          </div>
+          <div class="chat-char-list" id="chatCharList"></div>
+        </div>
+        <div class="chat-main">
+          <div class="chat-header">
+            <div class="target-info" id="chatTargetInfo">
+              <span style="color: var(--text-muted);">Select a character to start chatting</span>
+            </div>
+            <div class="header-actions">
+              <button id="resetConvBtn" class="small danger" disabled>Reset Thread</button>
+              <button id="copyConvBtn" class="small" disabled>Copy Thread</button>
+            </div>
+          </div>
+          <div class="chat-thread-bar" id="chatThreadBar" style="display:none;"></div>
+          <div class="chat-messages-wrap">
+            <div class="chat-messages" id="chatMessages">
+              <div class="chat-empty">
+                <h3>No character selected</h3>
+                <p>Click a character on the left to start chatting.</p>
+                <p style="margin-top: 12px; font-size: 11px;">Tip: check "Send to all selected" below to broadcast a message to multiple characters at once.</p>
+              </div>
+            </div>
+            <div class="scroll-nav">
+              <button type="button" id="chatScrollTop" title="Jump to top of chat">▲</button>
+              <button type="button" id="chatScrollBottom" title="Jump to latest message">▼</button>
+            </div>
+          </div>
+          <div class="tts-chat-progress" id="chatTtsProgress" style="display:none;"><div class="tts-chat-progress-fill"></div></div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <textarea id="chatInput" placeholder="Type a message... (Ctrl+Enter to send)" disabled></textarea>
+              <div class="input-scroll-nav">
+                <button type="button" id="chatJumpTop" title="Jump to the start of your message">▲</button>
+                <button type="button" id="chatJumpBottom" title="Jump to the end of your message">▼</button>
+              </div>
+            </div>
+            <div class="chat-input-actions">
+              <div class="left">
+                <label>
+                  <input type="checkbox" id="broadcastCheckbox">
+                  Send to all selected (<span class="char-count" id="selectedCount">0</span>)
+                </label>
+                <label>
+                  <input type="checkbox" id="selectAllForBroadcast" checked>
+                  Automatically select all active
+                </label>
+                <label style="margin-left: 8px;">
+                  Model:
+                  <select id="chatModelSelect" style="background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 2px 4px; border-radius: 4px; font-size: 11px; font-family: var(--mono); margin-left: 4px;">
+                    <option value="">Preset default</option>
+                  </select>
+                </label>
+              </div>
+              <div class="right">
+                <span id="chatStatus" style="font-size: 12px; color: var(--text-muted);"></span>
+                <button id="chatStopBtn" class="danger" type="button" style="display:none;" title="Cancel the in-flight request(s)">■ Stop</button>
+                <button id="sendChatBtn" class="primary" type="button" disabled>Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<dialog id="settingsModal">
+  <div class="settings-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <h2>⚙ API Settings</h2>
+  </div>
+  <div class="settings-tabs">
+    <button type="button" class="settings-tab active" data-settings-tab="api">🔌 API & Connection</button>
+    <button type="button" class="settings-tab" data-settings-tab="exec">⚡ Execution & History</button>
+    <button type="button" class="settings-tab" data-settings-tab="models">🧩 Models & Routing</button>
+    <button type="button" class="settings-tab" data-settings-tab="agent">🤖 Agent Tools</button>
+    <button type="button" class="settings-tab" data-settings-tab="presets">🎭 Presets</button>
+    <button type="button" class="settings-tab" data-settings-tab="subagents">🧑🤝🧑 Subagents</button>
+    <button type="button" class="settings-tab" data-settings-tab="appearance">🎨 Colors</button>
+    <button type="button" class="settings-tab" data-settings-tab="data">🗑 Data & Reset</button>
+  </div>
+  <div class="settings-content">
+    <!-- Tab 1: API & Connection -->
+    <div id="settingsTabApi" class="settings-tab-view active">
+      <div class="settings-section">
+        <h3 class="settings-section-h mb">
+          <span>🌐OpenRouter API Key</span>
+        </h3>
+        <label style="margin-bottom: 10px;">
+         OpenRouter API Key
+          <div class="api-key-row">
+            <input type="password" id="apiKeyInput" placeholder="sk-or-v1-...">
+            <button type="button" id="toggleKeyVisibility" class="small">👁</button>
+          </div>
+        </label>
+        <label style="margin-bottom: 0;">
+         OpenRouter API URL
+          <input type="text" id="apiUrlInput" placeholder="https://openrouter.ai/api/v1/chat/completions">
+        </label>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 12px; line-height: 1.4;">
+          The <strong>OpenRouter (Free)</strong> provider (🧩 Models &amp; Routing → Provider routing) uses this same API key and URL. When the model has a free <code>:free</code> variant it routes to it — e.g. <code>z-ai/glm-5.2</code> → <code>z-ai/glm-5.2:free</code> — and models OpenRouter prices at $0 (no <code>:free</code> suffix, e.g. <code>stealth/ox-alpha</code>) are served at their base id. Free variants change over time; if the chosen model has no free variant and isn't free by price, the request falls through to the next provider (or shows an error when OpenRouter (Free) is pinned).
+        </p>
+      </div>
+
+      <div class="settings-section">
+        <h3 class="settings-section-h">
+          <span>🤖 Google AI Studio Key (free-tier detection)</span>
+        </h3>
+        <label style="margin-bottom: 10px;">
+          Google AI Studio (Gemini API) key
+          <div class="api-key-row">
+            <input type="password" id="googleAiStudioKeyInput" placeholder="AIza... (free from aistudio.google.com)" autocomplete="off">
+            <button type="button" id="toggleGoogleKeyVisibility" class="small">👁</button>
+          </div>
+        </label>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 12px; line-height: 1.4;">
+          Optional — used only with Google's Gemini API to detect <strong>free Google AI Studio endpoints</strong>. Models known to have nonzero RPM/TPM/RPD limits are marked from the local catalog; newly listed models are checked with one tiny <code>generateContent</code> probe. A model is marked <code>(free)</code> only when it is in the known nonzero-limit set or its probe succeeds. This includes <code>gemini-2.5-flash</code>, including its <code>google/</code> and <code>:free</code> model-id variants. Without a key, only the known models can be marked. Use a free-tier key for discovery: a paid key may make paid models pass the probe and can incur usage charges. This never uses OpenRouter's free data. Results are cached for a few hours.
+        </p>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h">
+            <span>⚡ Modal API Key</span>
+          </h3>
+          <button type="button" id="addModalAccountBtn" class="small primary">+ Add Modal Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure Modal.com API accounts (acts as a <strong>provider</strong> for Moonshot Kimi K3 and future models).<br>
+          Key Format: <code>wk-&lt;TOKEN_ID&gt;.ws-&lt;TOKEN_SECRET&gt;</code> · Endpoint Format: <code>https://yourusername--kimi-k3-v1-chat-completions.modal.run/v1</code><br>
+          <strong>Shared endpoints:</strong> If your Modal endpoint serves multiple models, use the shared endpoint URL here. The <strong>Provider Routing → Models served</strong> panel will list every model the endpoint reports via its <code>/models</code> list. Requests send the full OpenRouter model slug (e.g. <code>moonshotai/kimi-k3</code>) as-is.<br>
+          When the <strong>modal(api)</strong> provider is routed for a model (e.g. <code>moonshotai/kimi-k3</code>), requests go directly to the first enabled Modal endpoint above with its key, bypassing OpenRouter. Use the plain <strong>modal</strong> provider instead to have OpenRouter itself route to Modal.
+        </p>
+        <div id="modalAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h">
+            <span>🟢 NVIDIA API Key</span>
+          </h3>
+          <button type="button" id="addNvidiaAccountBtn" class="small primary">+ Add NVIDIA Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure NVIDIA API accounts (acts as a <strong>provider</strong> for NVIDIA-hosted models, e.g. <code>nvidia/nemotron-3-super-120b-a12b</code>).<br>
+          Key Format: <code>nvapi-...</code> · Endpoint: <code>https://integrate.api.nvidia.com/v1</code><br>
+          When the <strong>nvidia(api)</strong> provider is routed for a model (e.g. <code>z-ai/glm-5.2</code>), requests go directly to the NVIDIA endpoint with its key, bypassing OpenRouter. Use the plain <strong>nvidia</strong> provider instead to have OpenRouter itself route to NVIDIA.<br>
+          <strong>GLM 5.2 specifics:</strong> Uses <code>extra_body</code> with <code>chat_template_kwargs</code> for <code>enable_thinking</code> and <code>clear_thinking</code>, supports <code>reasoning_content</code> in streaming.
+        </p>
+        <div id="nvidiaAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h">
+            <span>▲ Vercel API Key</span>
+          </h3>
+          <button type="button" id="addVercelAccountBtn" class="small primary">+ Add Vercel Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure Vercel API accounts (acts as a <strong>provider</strong> for DeepSeek V4 Flash and other Vercel-hosted models).<br>
+          Key Format: <code>sk-...</code> · Endpoint: <code>https://ai-gateway.vercel.sh/v1</code><br>
+          When the <strong>vercel(api)</strong> provider is routed for a model (e.g. <code>deepseek/deepseek-v4-flash-0731</code>), requests go directly to the Vercel endpoint with its key, bypassing OpenRouter. Use the plain <strong>vercel</strong> provider instead to have OpenRouter itself route to Vercel.
+        </p>
+        <div id="vercelAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>        </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h">
+            <span>🔷 ZenMux API Keys</span>
+          </h3>
+          <button type="button" id="addZenmuxAccountBtn" class="small primary">+ Add ZenMux Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure ZenMux API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://zenmux.ai/api/v1</code>. The <strong>zenmux(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to ZenMux.
+        </p>
+        <div id="zenmuxAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🐋 OrcaRouter API Keys</span></h3>
+          <button type="button" id="addOrcarouterAccountBtn" class="small primary">+ Add OrcaRouter Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure OrcaRouter API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.orcarouter.ai/v1</code>. The <strong>orcarouter(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to OrcaRouter.
+        </p>
+        <div id="orcarouterAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🌀 AIHubMix API Keys</span></h3>
+          <button type="button" id="addAihubmixAccountBtn" class="small primary">+ Add AIHubMix Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure AIHubMix API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://aihubmix.com/v1</code>. The <strong>aihubmix(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to AIHubMix.<br>
+          When a model has a free variant on AIHubMix (e.g. <code>coding-kimi-k3-free</code> or <code>gemini-3.7-flash-free</code>), requests are automatically routed to the <code>-free</code> version and those models are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="aihubmixAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🔀 UnoRouter API Keys</span></h3>
+          <button type="button" id="addUnorouterAccountBtn" class="small primary">+ Add UnoRouter Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure UnoRouter API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.unorouter.com/v1</code>. The <strong>unorouter(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to UnoRouter.<br>
+          UnoRouter serves OpenRouter-style <code>:free</code> ids without vendor prefixes (e.g. <code>glm-5.2:free</code>, <code>deepseek-v4-flash:free</code>); ids are resolved automatically and those models are tagged <strong>(free)</strong> in the provider's model list. When a reasoning variant exists (e.g. <code>glm-5.3-flash-thinking:free</code> for <code>z-ai/glm-5.3-flash</code>), requests prefer the <code>-thinking:free</code> version and fall back to the plain <code>:free</code> id on error.
+        </p>
+        <div id="unorouterAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🛩️ LiteRouter API Keys</span></h3>
+          <button type="button" id="addLiterouterAccountBtn" class="small primary">+ Add LiteRouter Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure LiteRouter API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.literouter.com/v1</code>. The <strong>literouter(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to LiteRouter.<br>
+          Serves OpenRouter-style vendor-prefixed ids (e.g. <code>deepseek/deepseek-v4-flash-0731</code>) as-is; ids are matched against <code>/v1/models</code> automatically. When a reasoning free variant exists (e.g. <code>deepseek-v4-flash-0731-thinking:free</code>), requests prefer it and fall back to the plain <code>:free</code> id on error. Free-tier models (daily free allowance, reported free by <code>/v1/models</code>) are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="literouterAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🐝 APInex API Keys</span></h3>
+          <button type="button" id="addApinexAccountBtn" class="small primary">+ Add APInex Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure APInex API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.apinex.bond/v1</code> — get a key at <strong>apinex.bond/keys</strong> (keys start with <code>sk-apx</code>). The <strong>apinex(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to APInex.<br>
+          Serves OpenRouter-style vendor-prefixed ids as-is; ids are matched against <code>/v1/models</code> automatically. Free models (e.g. <code>glm-5.3-free</code>) are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="apinexAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>♾️ AnyAPI API Keys</span></h3>
+          <button type="button" id="addAnyapiAccountBtn" class="small primary">+ Add AnyAPI Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure AnyAPI accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.anyapi.ai/v1</code> — get a key from your dashboard at <strong>dash.anyapi.ai</strong> (docs at <strong>docs.anyapi.ai</strong>). The <strong>anyapi(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to AnyAPI.<br>
+          Serves OpenRouter-style vendor-prefixed ids (e.g. <code>z-ai/glm-5.3-flash</code>) as-is; ids are matched against <code>/v1/models</code> automatically. Both <strong>free</strong> and <strong>basic</strong> tier models (unlimited on every plan, 100K ₳nyTokens/day on the Free plan) are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="anyapiAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🌸 NaraRouter API Keys</span></h3>
+          <button type="button" id="addNaraAccountBtn" class="small primary">+ Add NaraRouter Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure NaraRouter API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://router.bynara.id/v1</code> — get a key at <strong>router.bynara.id</strong> (keys start with <code>sk-nry-</code>). The <strong>nara(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to NaraRouter.<br>
+          Nara serves its own unprefixed aliases (e.g. <code>deepseek-v4-flash</code>, <code>kimi-k2.5</code>); vendor-prefixed slugs are resolved automatically against <code>/v1/models</code>. Free models (daily token quota, $0 credit pricing in the public pricing table) are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="naraAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🍜 OpenCode Zen API Keys</span></h3>
+          <button type="button" id="addZenAccountBtn" class="small primary">+ Add OpenCode Zen Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure OpenCode Zen API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://opencode.ai/zen/v1</code> — get a key at <strong>opencode.ai/zen</strong>. The <strong>zen(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to OpenCode Zen.<br>
+          Zen serves its own curated model ids (e.g. <code>kimi-k3</code>, <code>glm-5.2</code>) without vendor prefixes; ids are resolved automatically. Free models (e.g. <code>big-pickle</code>, <code>nemotron-3-ultra-free</code>) are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="zenAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>🧠 LLM7.io API Keys</span></h3>
+          <button type="button" id="addLlm7AccountBtn" class="small primary">+ Add LLM7 Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure LLM7.io API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.llm7.io/v1</code>. The <strong>llm7(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to LLM7.<br>
+          Works anonymously (empty key sends <code>unused</code>) — get a token from <strong>dash.llm7.io</strong> for higher limits. Model ids come from <code>/v1/models</code>; the aliases <code>default</code>, <code>fast</code> and <code>pro</code> select whatever LLM7 currently serves.
+        </p>
+        <div id="llm7AccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h"><span>⚓ NavyAI API Keys</span></h3>
+          <button type="button" id="addNavyAccountBtn" class="small primary">+ Add NavyAI Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure NavyAI API accounts for direct OpenAI-compatible requests. Endpoint: <code>https://api.navy/v1</code>. The <strong>navy(api)</strong> provider bypasses OpenRouter and sends the selected model slug directly to NavyAI.<br>
+          Get a key from your NavyAI dashboard (sign in via Discord). Model ids come from <code>/v1/models</code> and are unprefixed (e.g. <code>deepseek-v3</code>, <code>gpt-5.4</code>); vendor-prefixed slugs are resolved automatically. Models tagged <code>premium: false</code> / <code>token_multiplier: 0</code> are free (daily token allowance) and are tagged <strong>(free)</strong> in the provider's model list.
+        </p>
+        <div id="navyAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="settings-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <h3 class="settings-section-h">
+            <span>🌐 Inferx.net API Keys</span>
+          </h3>
+          <button type="button" id="addInferxAccountBtn" class="small primary">+ Add Inferx Account</button>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Configure Inferx.net API accounts (acts as a <strong>provider</strong> for deepseek/deepseek-v4-flash-0731 and other Inferx-hosted models).<br>
+          Key Format: <code>sk-...</code> · Endpoint: <code>https://model.inferx.net/endpoints/v1</code><br>
+          When the <strong>inferx(api)</strong> provider is routed for a model (e.g. <code>deepseek/deepseek-v4-flash-0731</code>), requests go directly to the Inferx endpoint with its key (automatically removing "deepseek/"), bypassing OpenRouter. Use the plain <strong>inferx</strong> provider instead to have OpenRouter itself route to Inferx.
+        </p>
+        <div id="inferxAccountsList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+      </div>
+
+      <div class="setting-row" style="margin-top:16px;">
+        <label>
+          <input type="checkbox" id="exportOutputsOnlyInput" checked>
+          Export outputs only (when ON, .md export contains only API responses — no input prompts. Turn OFF to include both input and output.)
+        </label>
+      </div>
+    </div>
+
+    <!-- Tab 2: Execution & History -->
+    <div id="settingsTabExec" class="settings-tab-view">
+      <label>
+        Stagger between dispatches (seconds)
+        <input type="number" id="staggerInput" step="0.1" min="0">
+      </label>
+      <label>
+        First auto-retry timer (seconds, default 5)
+        <input type="number" id="retryTimer1Input" min="1" max="600">
+      </label>
+      <label>
+        Second auto-retry timer (seconds, default 60)
+        <input type="number" id="retryTimer2Input" min="1" max="3600">
+      </label>
+      <label>
+        Per-call timeout (seconds)
+        <input type="number" id="timeoutInput" min="10">
+      </label>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="smartProviderSkipInput">
+          Smart Provider Skip — when a model with more than one provider in its provider routing hits an error, skip straight to the next provider in the list instead of waiting on the retry timers (each new call still starts at the top of the provider list)
+        </label>
+      </div>
+      <label>
+        Provider 429 cooldown (seconds, 0 = off — a provider that just returned a rate limit is skipped at the start of later calls for this long)
+        <input type="number" id="provider429CooldownInput" min="0" max="3600" step="5">
+      </label>
+      <label>
+        Provider error cooldown threshold (0 = off — a provider that fails this many requests in a row is skipped without calling it)
+        <input type="number" id="providerErrorThresholdInput" min="0" max="50">
+      </label>
+      <label>
+        Provider error cooldown (seconds — how long a provider that hit the error threshold above is skipped, e.g. 300 = 5 minutes)
+        <input type="number" id="providerErrorCooldownInput" min="0" max="86400" step="30">
+      </label>
+      <label>
+        Max parallel workers
+        <input type="number" id="workersInput" min="1" max="50">
+      </label>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="maintainHistoryInput" checked>
+          Maintain conversation history (sends full message history to API each call so the AI remembers)
+        </label>
+      </div>
+      <label>
+        Max history messages per conversation (0 = unlimited, older messages trimmed first)
+        <input type="number" id="maxHistoryInput" min="0">
+      </label>
+      <label>
+        Default thinking level (applies to any AI set to Auto / Default — Big Chat threads, character presets and subagents)
+        <select id="defaultThinkingLevelInput" style="width:100%;">
+          <option value="auto">Auto / Default</option>
+          <option value="none">None</option>
+          <option value="minimal">Minimal</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">X-High</option>
+          <option value="max">Max</option>
+        </select>
+      </label>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="enableStreamingInput" checked>
+          Stream responses in Big Chat (show the reply token-by-token as it is generated)
+        </label>
+      </div>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="showReasoningInput" checked>
+          Show reasoning / "thinking" when the model provides it
+        </label>
+      </div>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="stripToolReasoningInput" checked>
+          Strip preset "thinking" from Big Chat tool results (keeps the character's reasoning out of the Big Model's context to save tokens — it is still viewable in the Chat tab)
+        </label>
+      </div>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="desktopNotificationsInput">
+          Show a desktop notification when the AI finishes responding
+        </label>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; margin-top:-4px; margin-bottom:12px;">
+        <button type="button" id="testNotificationBtn" class="small">🔔 Send test notification</button>
+        <span id="notificationsHint" style="font-size:11px; color:var(--text-muted);"></span>
+      </div>
+
+      <div class="settings-section" style="margin-top: 16px; margin-bottom: 0;">
+        <h3 class="settings-section-h mb">
+          <span>🔊 Error Sounds</span>
+        </h3>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="errorSoundsEnabledInput">
+            Play a sound when an error occurs (API error, failed generation, etc.)
+          </label>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+          <label style="margin:0; display:flex; align-items:center; gap:6px;">
+            Volume:
+            <input type="range" id="errorSoundVolumeInput" min="0" max="100" value="80" style="width:120px;">
+            <span id="errorSoundVolumeLabel" style="font-family:var(--mono); font-size:11px; min-width:28px;">80%</span>
+          </label>
+          <button type="button" id="testErrorSoundBtn" class="small">🔊 Test random sound</button>
+        </div>
+        <p style="font-size:11px; color:var(--text-muted); margin-bottom:10px; line-height:1.4;">
+          Add one or more audio files (mp3, wav, ogg). If you add multiple, a random one will be chosen each time an error happens.
+        </p>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+          <input type="file" id="errorSoundFileInput" accept="audio/*" multiple style="display:none;">
+          <button type="button" id="addErrorSoundBtn" class="small primary">+ Add sound(s)</button>
+          <button type="button" id="clearErrorSoundsBtn" class="small danger">Clear all sounds</button>
+          <span id="errorSoundsCount" style="font-size:11px; color:var(--text-muted);"></span>
+        </div>
+        <div id="errorSoundsList" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; padding-right:4px;"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Models & Routing (unified Fallback Models + Providers) -->
+    <div id="settingsTabModels" class="settings-tab-view">
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="enableFallbackInput" checked>
+          Enable model fallback on HTTP 403 (when the primary model hits a budget limit, automatically retry with fallback models using <code>model@preset/name</code> syntax — keeps the character's system prompt but swaps the underlying AI)
+        </label>
+      </div>
+      <div style="display: block; margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">
+        Fallback models (tried in order on HTTP 403) — drag <strong style="color: var(--text);">⋮⋮</strong> to reorder, mark each as <strong style="color: var(--text);">Big</strong> or <strong style="color: var(--text);">Small</strong>
+        
+        <div class="arena-toolbar">
+          <span class="arena-status" id="arenaRankStatus">Arena.ai ranks: not loaded yet</span>
+          <button type="button" id="refreshArenaRanksBtn" class="small">Refresh Arena ranks</button>
+        </div>
+        <div id="fallbackModelsList" style="display:flex; flex-direction:column; gap:6px; margin-top:6px; max-height:calc(100vh - 540px); min-height:110px; overflow-y:auto; padding-right:4px;"></div>
+      </div>
+      <div id="modelPicker" class="model-picker">
+        <div class="mpk-top">
+          <input type="search" id="modelPickerSearch" placeholder="Search models by name or slug…" spellcheck="false">
+          <select id="modelPickerSize">
+            <option value="small">Add as Small</option>
+            <option value="big">Add as Big</option>
+          </select>
+          <button type="button" id="refreshCatalogBtn" class="small">⟳ Refresh model list</button>
+          <button type="button" id="modelPickerCloseBtn" class="small">Close</button>
+        </div>
+        <div class="mpk-list" id="modelPickerList"></div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input type="text" id="modelPickerManual" placeholder="…or type a custom model slug" spellcheck="false">
+          <button type="button" id="modelPickerManualAdd" class="small">+ Add</button>
+        </div>
+      </div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:18px 0 14px;">
+
+      <h3 style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 8px;">Provider routing</h3>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="enableProvidersInput" checked>
+          Enable provider routing (sends <code>provider.order</code> + <code>allow_fallbacks</code> with every request, restricting routing to the enabled providers below, in order)
+        </label>
+      </div>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="providerAllowFallbacksInput" checked>
+          Allow fallbacks to other providers if none of the allowed providers can serve the request
+        </label>
+      </div>
+      <div style="display: block; margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">
+        Allowed providers (tried in order) — drag <strong style="color: var(--text);">⋮⋮</strong> to reorder, uncheck to disable
+        <div id="providersList" style="display:flex; flex-direction:column; gap:6px; margin-top:6px; max-height:calc(100vh - 540px); min-height:96px; overflow-y:auto; padding-right:4px;"></div>
+      </div>
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" id="enableModelProvidersInput" checked>
+          Enable per-model provider overrides (configured inside each fallback model’s <strong style="color: var(--text);">ⓘ Show model details</strong> panel)
+        </label>
+      </div>
+      <div id="providerPicker" class="model-picker">
+        <div class="mpk-top">
+          <input type="search" id="providerPickerSearch" placeholder="Search providers by name or slug…" spellcheck="false">
+          <button type="button" id="refreshProviderCatalogBtn" class="small">⟳ Refresh provider list</button>
+          <button type="button" id="providerPickerCloseBtn" class="small">Close</button>
+        </div>
+        <div class="mpk-list" id="providerPickerList"></div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <input type="text" id="providerPickerManual" placeholder="…or type a custom provider slug" spellcheck="false">
+          <button type="button" id="providerPickerManualAdd" class="small">+ Add</button>
+        </div>
+      </div>
+      <button type="button" id="resetProvidersBtn" class="small" style="margin-top:6px;">↺ Reset to defaults</button>
+
+      <div class="tts-settings">
+        <strong style="font-size:12px;color:var(--text);">Default TTS</strong>
+        <p style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.5;">
+          Used by the <strong style="color:var(--text);">Speak</strong> button on chat and Big Chat messages.
+          Leave model blank to use free on-device voices via the browser. Pick an OpenRouter speech model to use <code>/api/v1/audio/speech</code> with your API key.
+        </p>
+        <div class="tts-row">
+          <label style="flex:1 1 300px;">TTS model
+            <div style="display:flex; gap:6px; align-items:center;">
+              <select id="defaultTtsModelInput" style="flex:1; min-width:0;">
+                <option value="">Browser (Web Speech) — free, offline</option>
+              </select>
+              <button type="button" id="openTtsModelPickerBtn" class="small" style="white-space:nowrap;">+ Browse TTS models…</button>
+            </div>
+          </label>
+          <label style="flex:1 1 240px;">Voice
+            <div style="display:flex; gap:6px; align-items:center;">
+              <select id="defaultTtsVoiceInput" style="flex:1; min-width:0;" title="Choose the voice sent to the selected speech model">
+                <option value="">Default</option>
+              </select>
+              <button type="button" id="openTtsVoicePickerBtn" class="small" style="white-space:nowrap;">+ Browse voices…</button>
+            </div>
+          </label>
+          <label style="flex:0 1 140px;">Format
+            <select id="defaultTtsFormatInput">
+              <option value="mp3">mp3</option>
+            </select>
+          </label>
+        </div>
+        <div class="tts-row" style="margin-top:6px;">
+          <label style="flex:1 1 300px;">Test text
+            <input type="text" id="ttsTestText" placeholder="Type something to hear it spoken…" style="width:100%;box-sizing:border-box;margin-top:2px;">
+          </label>
+          <button type="button" id="ttsTestBtn" class="small" style="align-self:end;white-space:nowrap;" title="Test TTS reading">▶ Test TTS</button>
+        </div>
+        <div class="tts-progress" id="ttsProgressBar" style="display:none;">
+          <div class="tts-progress-fill" id="ttsProgressFill"></div>
+        </div>
+        <div class="tts-row" style="margin-top:10px;">
+          <label style="flex:1 1 140px;">Volume
+            <div style="display:flex; gap:4px; align-items:center;">
+              <input type="range" id="defaultTtsVolume" min="0" max="100" value="100" style="flex:1; min-width:0;">
+              <span id="ttsVolumeLabel" style="font-size:11px;color:var(--text-muted);min-width:32px;text-align:right;">100%</span>
+            </div>
+          </label>
+          <label style="flex:1 1 140px;">Speed
+            <div style="display:flex; gap:4px; align-items:center;">
+              <input type="range" id="defaultTtsSpeed" min="25" max="300" value="100" style="flex:1; min-width:0;">
+              <span id="ttsSpeedLabel" style="font-size:11px;color:var(--text-muted);min-width:32px;text-align:right;">1×</span>
+            </div>
+          </label>
+        </div>
+        <div id="ttsModelPicker" class="model-picker">
+          <div class="mpk-top">
+            <input type="search" id="ttsModelPickerSearch" placeholder="Search speech models by name or slug…" spellcheck="false">
+            <button type="button" id="refreshTtsModelPickerBtn" class="small">⟳ Refresh model list</button>
+            <button type="button" id="ttsModelPickerCloseBtn" class="small">Close</button>
+          </div>
+          <div class="mpk-list" id="ttsModelPickerList"></div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="text" id="ttsModelPickerManual" placeholder="…or type a custom speech model slug" spellcheck="false">
+            <button type="button" id="ttsModelPickerManualAdd" class="small">Use model</button>
+          </div>
+        </div>
+        <div id="ttsVoicePicker" class="model-picker">
+          <div class="mpk-top">
+            <input type="search" id="ttsVoicePickerSearch" placeholder="Search voices…" spellcheck="false">
+            <button type="button" id="ttsVoicePickerCloseBtn" class="small">Close</button>
+          </div>
+          <div class="mpk-list" id="ttsVoicePickerList"></div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="text" id="ttsVoicePickerManual" placeholder="…or type a voice id" spellcheck="false">
+            <button type="button" id="ttsVoicePickerManualAdd" class="small">Use voice</button>
+          </div>
+        </div>
+        <div class="tts-row">
+          <label>Custom model slug (optional override)
+            <input type="text" id="defaultTtsModelManualInput" placeholder="e.g. hexgrad/kokoro-82m" spellcheck="false">
+          </label>
+          <label style="flex:0 0 auto;">&nbsp;
+            <button type="button" id="refreshTtsModelsBtn" class="small" style="display:block;">Refresh TTS models</button>
+          </label>
+        </div>
+        <p id="defaultTtsHint" style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.45;"></p>
+      </div>
+    </div>
+
+    <!-- Tab: Presets -->
+    <div id="settingsTabPresets" class="settings-tab-view">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:12px; color:var(--text-muted);">Folder filter:</span>
+          <select id="presetSettingsFolderFilter" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;">
+            <option value="">All folders</option>
+          </select>
+        </div>
+        <button type="button" id="addPresetBtn" class="small">+ Add preset</button>
+      </div>
+      <div id="presetSettingsList" style="display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 230px); overflow-y:auto; padding-right:4px;"></div>
+    </div>
+
+    <!-- Agent Tools -->
+    <div id="settingsTabAgent" class="settings-tab-view">
+      <div class="setting-row">
+        <label><input type="checkbox" id="agentToolsEnabledInput" checked>
+          Enable agent tools in Big Chat and subagents (files, calculator, RNG, web apps + screenshots)</label>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <strong style="font-size:12px;color:var(--text);">Big Chat default system prompt</strong>
+        <p style="font-size:11px;color:var(--text-muted);margin:6px 0;line-height:1.5;">
+          Applied to new Big Chat threads. A thread's own System Prompt can still be edited independently.
+        </p>
+        <textarea id="bigChatDefaultSystemPromptInput" rows="4" style="width:100%;background:var(--bg-elev-2);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:4px;font-family:inherit;font-size:12px;resize:vertical;" placeholder="Optional instructions for the Big Model"></textarea>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <strong style="font-size:12px;color:var(--text);">Long-running agent</strong>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Max steps per run
+            <input type="number" id="agentMaxStepsInput" min="1" max="5000">
+          </label>
+          <label style="margin:0;">Retries on error
+            <input type="number" id="agentRetriesInput" min="0" max="10">
+          </label>
+          <label style="margin:0;">Compact context at (% of window)
+            <input type="number" id="agentCompactAtInput" min="30" max="95" step="5">
+          </label>
+        </div>
+        <div class="setting-row" style="margin:8px 0 0;">
+          <label><input type="checkbox" id="agentCompactInput" checked>
+            Auto-compact: summarise older turns instead of failing when the context fills up</label>
+        </div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🔁 Repetition loop guard</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="repeatLoopDetectionEnabledInput" checked> Enabled</label>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:11px;">Stop after
+            <input type="number" id="repeatLoopThresholdInput" min="2" max="50" style="width:70px;" placeholder="5">
+            identical repeats
+          </label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          When the model repeats the same line (while thinking or answering) or the exact same tool call
+          N times in a row, the streaming request is cut off, the repeated copies are removed from the output,
+          and the model is told to continue where it left off. Works during streaming, non-streaming replies,
+          Big Chat, subagents and preset calls.
+        </p>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🎮 Godot engine</strong>
+          <span id="godotVersionLine" style="font-size:11px;color:var(--text-muted);">checking…</span>
+        </div>
+        <p id="godotEngineDetail" style="font-size:11px;color:var(--text-muted);margin:4px 0 0;line-height:1.5;font-family:ui-monospace,monospace;word-break:break-all;"></p>
+        <p style="font-size:11px;color:var(--text-muted);margin:6px 0;line-height:1.5;">
+          <code>godot_run</code> plays a project's own main scene and writes screenshots with Movie Maker mode, so the
+          AI can open a game, run it and look at a frame. Rendering uses the GPU and falls back by itself to a CPU
+          rasterizer (SwiftShader's CPU Vulkan, then Mesa llvmpipe) only when graphics fails or draws nothing; a run
+          that asks for a CPU rasterizer explicitly skips the GPU. Nothing is shown on screen either way — the engine
+          window is parked off-screen for the fraction of a second the run lasts, so a taskbar entry may flash.
+          Renders run offline at a fixed frame rate, not in real time, so a slow machine still produces correct frames.
+          Godot's own <code>--headless</code> mode is a dummy rasterizer that renders nothing, so it is used only for
+          pure-logic tests.
+        </p>
+        <div class="setting-row" style="margin:6px 0 0;">
+          <label><input type="checkbox" id="godotProvisionEngineInput" checked>
+            Install a Godot engine into the app automatically when none is found (one-time, ~86 MB)</label>
+        </div>
+        <div class="setting-row" style="margin:6px 0 0;">
+          <label><input type="checkbox" id="godotUpdateCheckOnBootInput" checked>
+            Check for a newer Godot release when the app starts</label>
+        </div>
+        <div class="setting-row" style="margin:6px 0 0;">
+          <label><input type="checkbox" id="godotUpdateAutoInstallInput">
+            Install a new stable release automatically when one is found (large download)</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button type="button" id="godotCheckUpdateBtn" class="small">Check now</button>
+          <button type="button" id="godotInstallUpdateBtn" class="small" disabled>Download &amp; install update</button>
+        </div>
+        <p id="godotUpdateStatus" style="font-size:11px;color:var(--text-muted);margin:6px 0 0;line-height:1.5;"></p>
+      </div>
+      <div class="setting-row">
+        <label><input type="checkbox" id="presetToolsEnabledInput">
+          Also let character presets use these tools (each preset reply may run a short tool loop)</label>
+      </div>
+      <div class="setting-row">
+        <label><input type="checkbox" id="parallelCallsEnabledInput" checked>
+          Run multiple tool calls in parallel (when the model emits several at once, execute them concurrently instead of one at a time). File-editing tools are always serialized per file — only reads and non-file tools truly race.</label>
+      </div>
+
+      <!-- Memory -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🧠 Project memory</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentMemoryEnabledInput" checked> Enabled</label>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:11px;">File
+            <input type="text" id="agentMemoryFileInput" style="width:130px;" placeholder="AGENTS.md">
+          </label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          <code>AGENTS.md</code> at the workspace root is auto-loaded into every Big Chat run. The <code>update_memory</code>
+          tool lets the agent read/append to it, so decisions and conventions persist across sessions.
+        </p>
+      </div>
+
+      <!-- Skills -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🧰 Skills</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="skillsEnabledInput" checked> Enabled</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          Reusable instruction bundles (<code>SKILL.md</code>). Three are built in; add your own at
+          <code>skills/&lt;name&gt;/SKILL.md</code> in the workspace. Enabled skills (name + description) are listed
+          directly in the Big Chat system prompt.
+        </p>
+      </div>
+
+      <!-- Web search -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🌐 Web search tool</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="webSearchEnabledInput" checked> Enabled</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The <code>web_search</code> tool lets the agent and research subagents query a search engine for live results
+          instead of only fetching known URLs. <strong>Provider ranking</strong> (below) tries the enabled providers in
+          order, top first; DuckDuckGo is the automatic backup when "Allow fallback" is on. SearXNG is the default
+          (no API key) — point it at your own instance for maximum reliability and privacy. Optional providers such as
+          Tavily, Brave or Mojeek are also supported. The endpoint/key/method fields above still set the legacy
+          single-endpoint default (migrated into the SearXNG provider once). In the desktop app requests go through the
+          main process, so no CORS limits apply.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Search endpoint (SearXNG by default)
+            <input type="text" id="webSearchEndpointInput" style="width:100%;" placeholder="https://searxng.gr/search">
+          </label>
+          <label style="margin:0;">API key (blank = none)
+            <input type="password" id="webSearchApiKeyInput" style="width:100%;" placeholder="sk-...">
+          </label>
+          <label style="margin:0;">Key header name
+            <input type="text" id="webSearchKeyHeaderInput" style="width:100%;" placeholder="X-API-KEY">
+          </label>
+          <label style="margin:0;">Method
+            <select id="webSearchMethodInput" style="width:100%;">
+              <option value="GET">GET (SearXNG / Brave / Mojeek)</option>
+              <option value="POST">POST (Tavily / generic JSON)</option>
+            </select>
+          </label>
+          <label style="margin:0;">Read top results
+            <input type="number" id="webSearchReadInput" min="0" max="5" step="1" style="width:100%;" title="How many of the top results to fetch and read (0 = links + snippets only, the default)">
+          </label>
+        </div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:14px 0 12px;">
+        <h3 style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin:0 0 8px;">Provider ranking</h3>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="webSearchProvidersEnabledInput" checked>
+            Enable provider ranking (tries the providers below in order, top first)
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>
+            <input type="checkbox" id="webSearchAllowFallbacksInput" checked>
+            Allow fallback to DuckDuckGo if no ranked provider returns results (when provider ranking is off, DuckDuckGo is used only if this is checked)
+          </label>
+        </div>
+        <div style="display:block;margin-bottom:12px;font-size:12px;color:var(--text-muted);">
+          Search providers (tried in order) — drag <strong style="color:var(--text);">⋮⋮</strong> to reorder, uncheck to disable, ⓘ to configure
+          <div id="webSearchProvidersList" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;max-height:260px;min-height:96px;overflow-y:auto;padding-right:4px;"></div>
+        </div>
+        <div id="webSearchProviderPicker" class="model-picker">
+          <div class="mpk-top">
+            <input type="search" id="webSearchProviderPickerSearch" placeholder="Search providers…" spellcheck="false">
+            <button type="button" id="webSearchProviderPickerCloseBtn" class="small">Close</button>
+          </div>
+          <div class="mpk-list" id="webSearchProviderPickerList"></div>
+        </div>
+        <button type="button" id="resetWebSearchProvidersBtn" class="small" style="margin-top:6px;">↺ Reset to defaults</button>
+        <button type="button" id="testWebSearchBtn" class="small" style="margin-top:6px;margin-left:6px;">▶ Test search</button>
+        <span id="webSearchTestResult" style="font-size:11px;color:var(--text-muted);margin-left:8px;"></span>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The tool returns ranked results with titles, URLs and snippets. By default it stops there
+          (<code>0</code>) — the agent only sees the search summaries, and fetches full pages on demand
+          (via <code>fetch_url</code> or <code>read: N</code>). Set a number here to make the tool also open
+          the top result pages and include their real text in the answer, so a search for recipes returns
+          actual ingredients and steps. Page-reading is free (it fetches the pages the search already found)
+          and is skipped for pages that block reading; the model can override per call with <code>read: N</code>.
+        </p>
+      </div>
+
+      <!-- Fetch tool -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <strong style="font-size:12px;color:var(--text);">🔗 Fetch tool</strong>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The <code>fetch_url</code> tool downloads a page and returns its text so the agent can read any public URL.
+          In the desktop app requests go through the main process, so no CORS limits apply. Response text is capped at
+          20,000 characters; the wait time below is configurable.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Timeout (seconds)
+            <input type="number" id="fetchTimeoutInput" min="1" max="60" step="1" style="width:100%;" title="How long to wait for a page before giving up (1-60s)">
+          </label>
+        </div>
+      </div>
+
+      <!-- Web downloader -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <strong style="font-size:12px;color:var(--text);">⬇️ Web downloader</strong>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The <code>web_download</code> tool saves a real file from the web into the agent's workspace
+          (PDFs, images, archives, anything). In the desktop app it goes through the main process, so no CORS limits
+          apply and redirects are followed.          Files land in the workspace and can be viewed with <code>fs_list</code>,
+          moved with <code>fs_move</code> or deleted with <code>fs_delete</code>. The workspace read cap
+          (1000 MB) is well above this download limit, so anything you download here can also be read back or moved.
+          Wait time reuses the Fetch tool timeout.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Max file size (MB)
+            <input type="number" id="downloadMaxMBInput" min="1" max="100" step="1" style="width:100%;" title="Largest file the tool may download (1-100 MB)">
+          </label>
+        </div>
+      </div>
+
+      <!-- Screenshots for the model -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <strong style="font-size:12px;color:var(--text);">🖼 Screenshots sent to the model</strong>
+        <p style="font-size:11px;color:var(--text-muted);margin:6px 0;line-height:1.5;">
+          When a vision-capable model receives tool screenshots (Web Browser tab), the copy sent to the model
+          is downscaled and re-encoded as JPEG to save tokens. The user always sees the full-resolution original in chat.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Max edge (pixels)
+            <input type="number" id="screenshotMaxDimInput" min="256" max="4096" step="64" style="width:100%;" title="Longest edge of the image sent to the model (256-4096). Default 1024.">
+          </label>
+          <label style="margin:0;">JPEG quality (0.3–1)
+            <input type="number" id="screenshotQualityInput" min="0.3" max="1" step="0.05" style="width:100%;" title="JPEG encoding quality for the model-facing copy. 1 keeps PNG untouched when it already fits the max edge. Default 0.8.">
+          </label>
+        </div>
+      </div>
+
+      <!-- Agent browser -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🌐 Agent browser tools</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="agentBrowserEnabledInput" checked> Enabled</label>
+          <label style="margin:0;margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;">URL-bar search engine
+            <select id="browserSearchEngineInput" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;font-size:11px;">
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+            </select>
+          </label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          Gives the agent full control of the <strong>Web Browser tab</strong>: navigate, click, fill forms, scroll, read
+          pages, screenshot and run page scripts (<code>browser_*</code> tools). The browser is a real Chromium guest
+          sandboxed inside the app (separate process, in-memory cookies) — the user watches every action live in that tab.
+          Available in the installed desktop app only.
+        </p>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">Workspace folder</strong>
+          <span id="agentWorkspaceLabel" style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">In memory</span>
+          <button type="button" id="agentMountBtn" class="small" style="margin-left:auto;">📁 Choose folder…</button>
+          <button type="button" id="agentUnmountBtn" class="small">Use memory</button>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The agent only ever sees paths relative to this folder (e.g. <code>/src/app.js</code>) — never the real location on your PC.
+          It cannot read or write anything outside it, and <code>..</code> escapes are rejected.
+        </p>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🧰 Default Big Chat tools</strong>
+          <label style="margin:0;margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;"><input type="checkbox" id="bigChatDefaultToolsEnabledInput" checked> Enabled by default</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The tools enabled by default in every new Big Chat thread. You can still turn items on/off per-thread in that
+          thread's <code>🧰 Big Chat Capabilities</code> panel, and a tool unchecked here can be re-enabled manually there.
+          Turning this category off starts every new thread with no tools.
+        </p>
+        <div id="agentToolList" class="color-grid"></div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">
+          <strong style="color:var(--text);">Isolated by default:</strong> <code>run_webapp</code> serves the app from an isolated local server and opens it in the agent's Web Browser tab, which runs in its own Chromium process and can render in the background — inline pages, multi-file web apps and WebGL/three.js games all run there. There is no host shell.
+        </p>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🧑‍🤝‍🧑 Default Big Chat subagents</strong>
+          <label style="margin:0;margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;"><input type="checkbox" id="bigChatDefaultSubagentsEnabledInput" checked> Enabled by default</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          Which subagents are available by default when a new Big Chat thread starts (the <code>delegate</code> tool).
+          Unchecked subagents can still be enabled in a thread from its Capabilities panel. Turning this category off
+          starts every new thread with no subagents (without affecting existing threads).
+        </p>
+        <div id="bigChatDefaultSubagentsList" class="color-grid"></div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🎭 Default Big Chat presets</strong>
+          <label style="margin:0;margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;"><input type="checkbox" id="bigChatDefaultPresetsEnabledInput" checked> Enabled by default</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          Which character presets the Big Model may call by default in a new thread (the <code>call_preset</code> tool).
+          Any preset can be enabled per-thread afterward. Turning this category off starts every new thread with no
+          presets (without affecting existing threads).
+        </p>
+        <div id="bigChatDefaultPresetsList" class="color-grid"></div>
+      </div>
+    </div>
+
+    <!-- Subagents -->
+    <div id="settingsTabSubagents" class="settings-tab-view">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <strong style="font-size:12px;color:var(--text);">🧑🤝🧑 Subagents</strong>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="subagentsEnabledInput" checked> Enabled</label>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;">
+          The <code>delegate</code> tool spawns isolated worker agents with their own prompts, restricted tools and step
+          budget, keeping their working context out of your main context. Several subagents run in parallel within one turn,
+          capped by "Max parallel sub-agents" — extras are queued and started as slots free up. File-editing tools are
+          serialized per file (and one workspace write at a time), so parallel agents cannot overwrite each other's edits.
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-top:8px;">
+          <label style="margin:0;">Max steps per sub-agent
+            <input type="number" id="subagentMaxStepsInput" min="1" max="500">
+          </label>
+          <label style="margin:0;">Max parallel sub-agents
+            <input type="number" id="subagentParallelLimitInput" min="1" max="16" title="How many delegate sub-agents may execute at the same time; extra delegate calls wait in a queue">
+          </label>
+          <label style="margin:0;">Sub-agent model (blank = Big Chat model)
+            <input type="text" id="subagentModelInput" placeholder="e.g. google/gemini-3.5-flash-lite">
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; gap:8px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px;">
+          <strong style="font-size:12px;color:var(--text);">Sub-agent profiles</strong>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5;">
+            These are the specialists the <code>delegate</code> tool can spawn. Edit the id, name, description, default
+            model, thinking level, memory, system prompt, step budget, allowed tools and which other subagents it may
+            call of each. Each profile's checked tools are granted to that worker; checking profiles under "Can call
+            subagents" lets it delegate to exactly those, nothing else. The global agent-tools master and
+            feature-specific switches (Web Search) remain hard safety gates.
+          </p>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" id="resetSubagentsBtn" class="small" title="Restore the 4 default subagents">↺ Reset defaults</button>
+          <button type="button" id="addSubagentBtn" class="small">+ Add sub-agent</button>
+        </div>
+      </div>
+      <div id="subagentProfileList" style="display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 330px); overflow-y:auto; padding-right:4px;"></div>
+    </div>
+
+    <!-- Tab 6: Colors / Appearance -->
+    <div id="settingsTabAppearance" class="settings-tab-view">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <span style="font-size:12px; color:var(--text-muted);">Editing theme:</span>
+        <select id="themeColorTargetSelect" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;">
+          <option value="dark">🌙 Dark</option>
+          <option value="light">☀ Light</option>
+        </select>
+        <label style="display:flex; align-items:center; gap:5px; font-size:12px; margin:0; cursor:pointer;">
+          <input type="checkbox" id="livePreviewColorsInput" checked>Live preview
+        </label>
+        <button type="button" id="resetThemeColorsBtn" class="small" style="margin-left:auto;">↺ Reset this theme</button>
+      </div>
+      <label style="margin-bottom:4px;">Interface colors — changes apply to the selected theme only</label>
+      <div id="themeColorsGrid" class="color-grid"></div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:18px 0 14px;">
+
+      <label>
+        Default color for new presets
+        <div class="color-item" style="max-width:340px; margin-top:6px;">
+          <input type="color" id="defaultPresetColorInput" value="#6366f1">
+          <input type="text" id="defaultPresetColorHex" class="ci-hex" style="width:90px;" value="#6366f1">
+          <div class="swatches" id="defaultPresetColorSwatches"></div>
+        </div>
+      </label>
+      <label style="margin-top:10px;">
+        Preset color palette (the swatches offered in each preset's settings — comma separated hex values)
+        <input type="text" id="presetPaletteInput" placeholder="#c51111, #132ed1, ...">
+      </label>
+      <button type="button" id="resetPresetPaletteBtn" class="small">↺ Reset palette</button>
+    </div>
+
+    <!-- Data & Reset -->
+    <div id="settingsTabData" class="settings-tab-view">
+      <div id="storageSummary" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:14px;font-size:12px;"></div>
+
+      <label>Settings</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+        <button type="button" id="settingsExportBtn" class="small">⬇ Export settings (.json)</button>
+        <button type="button" id="settingsImportBtn" class="small">⬆ Import settings</button>
+        <input type="file" id="settingsImportInput" accept="application/json,.json" style="display:none;">
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin:-10px 0 16px;line-height:1.5;">
+        Configuration only — API keys, providers, models, agent tools, colors and presets — without your conversations. The file contains your API keys, so keep it somewhere private.
+      </p>
+
+      <label>Backup</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+        <button type="button" id="backupExportBtn" class="small">⬇ Export everything (.json)</button>
+        <button type="button" id="backupImportBtn" class="small">⬆ Restore from file</button>
+        <input type="file" id="backupImportInput" accept="application/json,.json" style="display:none;">
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin:-10px 0 16px;line-height:1.5;">
+        The backup contains your API key. Keep the file somewhere private.
+      </p>
+
+      <label>Clear specific data</label>
+      <div class="danger-grid">
+        <button type="button" class="clear-btn" data-clear="chats">🗨 Clear all conversations<small>Character chats and Big Chat threads</small></button>
+        <button type="button" class="clear-btn" data-clear="turns">📋 Clear turn history<small>Batch run results and inputs</small></button>
+        <button type="button" class="clear-btn" data-clear="bigchat">🧠 Clear Big Chat only<small>Leaves character chats intact</small></button>
+        <button type="button" class="clear-btn" data-clear="catalog">📚 Clear model catalog cache<small>Model, provider & Arena.ai list caches — re-downloaded on demand</small></button>
+        <button type="button" class="clear-btn" data-clear="key">🔑 Clear API key<small>Keeps everything else</small></button>
+        <button type="button" class="clear-btn" data-clear="workspace">📁 Clear In memory workspace<small>Agent files not saved to a real folder</small></button>
+      </div>
+
+      <label style="margin-top:18px;">Reset to defaults</label>
+      <div class="danger-grid">
+        <button type="button" class="clear-btn warn" data-clear="settings">⚙ Reset settings<small>Providers, models, colors, tools — keeps chats</small></button>
+        <button type="button" class="clear-btn warn" data-clear="presets">🎭 Reset presets<small>Restores the 14 default characters</small></button>
+        <button type="button" class="clear-btn warn" data-clear="colors">🎨 Reset colors<small>Theme and preset palette</small></button>
+      </div>
+
+      <label style="margin-top:18px;color:var(--red);">Danger zone</label>
+      <button type="button" class="clear-btn danger-full" data-clear="everything">
+        💣 Erase everything and start fresh<small>Wipes all data including your API key. Cannot be undone.</small>
+      </button>
+    </div>
+  </div>
+  </div>
+  <div class="settings-footer" style="display:flex;justify-content:flex-end;gap:8px;padding:12px 24px;border-top:1px solid var(--border);flex-shrink:0;">
+    <button type="button" id="cancelSettingsBtn">Cancel</button>
+    <button type="button" id="saveSettingsBtn" class="primary">Save</button>
+  </div>
+</dialog>
+
+<script src="fflate.js"></script>
+<script src="shared-tool-defs.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
+l>
+y>
+</html>
+l>
