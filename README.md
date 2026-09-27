@@ -6,6 +6,8 @@
 2. `npm install`
 3. `npm start`
 
+(Or just run START-APP.bat)
+
 ## Web search
 
 The `web_search` agent tool uses SearXNG as its default provider and automatically
